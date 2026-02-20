@@ -20,7 +20,7 @@ parser.add_argument("--threads", default=1, type=int, help="Maximum number of th
 
 def main(args: argparse.Namespace) -> tuple[float, float]:
     # Set the random seed and the number of threads.
-    npfl138.startup(args.seed, args.threads, args.recodex)
+    npfl138.startup(args.seed, args.threads)
     npfl138.global_keras_initializers()
 
     # Prepare the data.
@@ -28,12 +28,16 @@ def main(args: argparse.Namespace) -> tuple[float, float]:
 
     data_indices = np.random.choice(len(mnist.train), size=args.examples, replace=False)
     data = mnist.train.data["images"][data_indices].to(torch.float32) / 255
+    #print(data.shape)
+    #print(data[0][0][14])
 
     # TODO: Data has shape [args.examples, MNIST.C, MNIST.H, MNIST.W].
     # We want to reshape it to [args.examples, MNIST.C * MNIST.H * MNIST.W].
     # We can do so using `torch.reshape(data, new_shape)` with new shape
     # `[data.shape[0], data.shape[1] * data.shape[2] * data.shape[3]]`.
-    data = ...
+    # We reshaped the 3D image to 1D vector of 784 pixels.
+    data = torch.reshape(data, (data.shape[0], data.shape[1] * data.shape[2] * data.shape[3]))
+    #print(data.shape)
 
     # TODO: Now compute mean of every feature. Use `torch.mean`, and set
     # `dim` (or `axis`) argument to zero -- therefore, the mean will be
@@ -41,31 +45,44 @@ def main(args: argparse.Namespace) -> tuple[float, float]:
     #
     # Note that for compatibility with Numpy/TF/Keras, all `dim` arguments
     # in PyTorch can be also called `axis`.
-    mean = ...
+    mean = torch.mean(data, axis=0)
+    # the mean is calculated for each pixel position across all the images
+    # axis=0 means that mean is calculated across the first dimension, so across examples
 
     # TODO: Compute the covariance matrix. The covariance matrix is
     #   (data - mean)^T @ (data - mean) / data.shape[0]
     # where transpose can be computed using `torch.transpose` or `torch.t` and
     # matrix multiplication using either Python operator @ or `torch.matmul`.
-    cov = ...
+    cov = (data - mean).T @ (data - mean) / data.shape[0]
+    # matrix is NxD, where N is the number of examples and D is the number of features,
+    # and we want to get DxD matrix, variances for each feature and covariances between all pairs of features
+    # We divide by the number of examples to get the average covariance
+    # The covariance matrix captures how different features in the dataset vary together.
 
     # TODO: Compute the total variance, which is the sum of the diagonal
     # of the covariance matrix. To extract the diagonal use `torch.diagonal`,
     # and to sum a tensor use `torch.sum`.
-    total_variance = ...
+    total_variance = torch.sum(torch.diagonal(cov))
+    # The total variance is the sum of the variances of all the features,
+    # thus the sum of the main diagonal of the covariance matrix.
 
     # TODO: Now run `args.iterations` of the power iteration algorithm.
+    # goal of power iteration is to find the dominant eigenvector and its corresponding eigenvalue of the covariance matrix
     # Start with a vector of `cov.shape[0]` ones of type `torch.float32` using `torch.ones`.
-    v = ...
+    v = torch.ones(cov.shape[0], dtype=torch.float32)
     for i in range(args.iterations):
         # TODO: In the power iteration algorithm, we compute
+        v = cov @ v
         # 1. v = cov v
         #    The matrix-vector multiplication can be computed as regular matrix multiplication
         #    or using `torch.mv`.
         # 2. s = l2_norm(v)
         #    The l2_norm can be computed using for example `torch.linalg.vector_norm`.
+        s = torch.linalg.vector_norm(v)
+        # calculate the norm of the vector v
         # 3. v = v / s
-        ...
+        v = v / s  # is normalized so that its length remains 1
+        pass
 
     # The `v` is now approximately the eigenvector of the largest eigenvalue, `s`.
     # We now compute the explained variance, which is the ratio of `s` and `total_variance`.
