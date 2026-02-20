@@ -14,7 +14,7 @@ parser.add_argument("--activation", default="none", choices=["none", "relu", "ta
 parser.add_argument("--batch_size", default=50, type=int, help="Batch size.")
 parser.add_argument("--epochs", default=10, type=int, help="Number of epochs.")
 parser.add_argument("--hidden_layer_size", default=100, type=int, help="Size of the hidden layer.")
-parser.add_argument("--hidden_layers", default=1, type=int, help="Number of layers.")
+parser.add_argument("--hidden_layers", default=0, type=int, help="Number of layers.")
 parser.add_argument("--recodex", default=False, action="store_true", help="Evaluation in ReCodEx.")
 parser.add_argument("--seed", default=42, type=int, help="Random seed.")
 parser.add_argument("--threads", default=1, type=int, help="Maximum number of threads to use.")
@@ -49,11 +49,23 @@ def main(args: argparse.Namespace) -> dict[str, float]:
     #   `torch.nn.Linear()`, each with `args.hidden_layer_size` neurons and followed by
     #   a specified `args.activation`, allowing "none", "relu", "tanh", "sigmoid";
     # - finally, add an output fully connected layer with `MNIST.LABELS` units.
-    ...
+
+    model.append(torch.nn.Flatten())
+    if args.hidden_layers > 0:
+        for i in range(args.hidden_layers):
+            model.append(torch.nn.Linear(MNIST.C * MNIST.H * MNIST.W if i == 0 else args.hidden_layer_size, args.hidden_layer_size))
+            if args.activation == "relu":
+                model.append(torch.nn.ReLU())
+            elif args.activation == "tanh":
+                model.append(torch.nn.Tanh())
+            elif args.activation == "sigmoid":
+                model.append(torch.nn.Sigmoid())
+        model.append(torch.nn.Linear(args.hidden_layer_size, MNIST.LABELS))
+    else:
+        model.append(torch.nn.Linear(MNIST.C * MNIST.H * MNIST.W, MNIST.LABELS))
 
     # Create the TrainableModule and configure it for training.
     model = npfl138.TrainableModule(model)
-
     model.configure(
         optimizer=torch.optim.Adam(model.parameters()),
         loss=torch.nn.CrossEntropyLoss(),
